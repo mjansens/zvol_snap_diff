@@ -10,12 +10,17 @@
  */
 
 /*
- * This programs compares 2 snapshts and generate a diff stream (usable by cowpatch.php)
+ * This programs compares 2 snapshots and generates a diff stream (usable by cowpatch.php)
  * diff stream format:
- * <blocksize in hexadecimal>\n
- * '+'|'-'|'M' <offset in hexadecimal>\n
- * <block data>
+ * <blocksize (hexadecimal)>\n
+ * '+'|'-'|'M' <offset (hexadecimal)>\n
+ * [<block data>]
  * ....
+ * 
+ * <block data> is included only if '-d' option is used and mod char is '+' or 'M'
+ * + is a new block
+ * M block exists in both snaps but checksum differ
+ * - is a block that has been trimmed/unmapped (cow_patch.php does nothing at this time). There is no block data following a - 
  * 
  * example:
  * host1> php zvol_snap_diff.php -d zones/imageuuid@dataset zones/vmuuid-disk0@migration | ssh host2 "php cow_patch.php /dev/zvol/dsk/vmuuid-disk0"
@@ -36,6 +41,8 @@ if ($argv[1] == "-d") {
 }
 //blocksize of zvols (could get it from zdb)
 $blocksize = $argv[$arg1 + 2];
+
+$start_time=time();
 
 //run zdb for both snapshots
 $fp1 = popen("zdb -vvvvv " . $argv[$arg1], "r");
@@ -164,7 +171,11 @@ while ($res2) {
     }
 }
 
-fprintf(STDERR, "Block diff check completed: %d added %d removed %d modified\n", $blocks_added, $blocks_removed, $blocks_modified);
+$spent_time=time()-$start_time;   
+fprintf(STDERR, "Block diff check completed: %d added %d removed %d modified in %d seconds\n", $blocks_added, $blocks_removed, $blocks_modified,$spent_time);
+exit(0);
+/*-----------------------------------------------------------------------------------------*/
+
 
 function get_next_blockinfo($firstcall, $fp) {
     if ($firstcall) {
